@@ -1,0 +1,139 @@
+FROM arm32v7/debian:11.9 as buildapk
+RUN apt-get update
+RUN apt-get install -y  perl wget tar gzip
+RUN apt-get install -y  make gcc binutils grep chrpath
+RUN apt-get install -y  libpar-packer-perl
+RUN apt-get install -y  libcpan-distnameinfo-perl
+RUN apt-get install -y \
+	libmodule-build-perl\
+	libclass-accessor-perl\
+	libdata-dump-perl\
+	libdata-compare-perl\
+	libdata-uniqid-perl\
+	libdatetime-format-builder-perl\
+	libdatetime-calendar-julian-perl\
+	libfile-slurper-perl\
+	libipc-run3-perl\
+	liblist-allutils-perl\
+	liblist-moreutils-perl\
+	liblist-moreutils-xs-perl\
+	libregexp-common-perl\
+	liblog-log4perl-perl\
+	libunicode-collate-perl\
+	libunicode-linebreak-perl\
+	libencode-locale-perl\
+	libencode-jis2k-perl\
+	libencode-hanextra-perl\
+	libperlio-utf8-strict-perl\
+	libxml-libxml-perl\
+	libxml-libxml-simple-perl\
+	libxml-libxslt-perl\
+	libxml-writer-perl\
+	libsort-key-perl\
+	libtext-csv-perl\
+	libtext-csv-xs-perl\
+	liblwp-protocol-https-perl\
+	libbusiness-isbn-perl\
+	libbusiness-issn-perl\
+	libbusiness-ismn-perl\
+	liblingua-translit-perl\
+	libio-string-perl\
+	libparse-recdescent-perl\
+	libtext-bibtex-perl\
+	libtext-roman-perl\
+	libautovivification-perl\
+	libconfig-autoconf-perl\
+	libextutils-libbuilder-perl\
+	libfile-which-perl\
+	libtest-differences-perl
+
+#	libmozilla-ca-perl\
+#	libencode-eucjpascii-perl\
+
+FROM buildapk as buildperl
+COPY MyConfig.pm /root/.cpan/CPAN/MyConfig.pm.debian
+
+FROM buildperl as buildbiber
+ARG biberversion=2.19
+WORKDIR /root
+RUN wget https://github.com/plk/biber/archive/refs/tags/v${biberversion}.tar.gz -O- | tar xz && mv biber-${biberversion} biber
+WORKDIR /root/biber
+RUN perl Build.PL
+RUN ./Build installdeps
+
+FROM buildbiber as installbiber
+WORKDIR /root/biber
+RUN ./Build install
+
+FROM installbiber as pack
+RUN PAR_VERBATIM=1 /usr/bin/pp \
+	--module=deprecate \
+	--module=Biber::Input::file::bibtex \
+	--module=Biber::Input::file::biblatexml \
+	--module=Biber::Output::dot \
+	--module=Biber::Output::bbl \
+	--module=Biber::Output::bblxml \
+	--module=Biber::Output::bibtex \
+	--module=Biber::Output::biblatexml \
+	--module=Pod::Simple::TranscodeSmart \
+	--module=Pod::Simple::TranscodeDumb \
+	--module=List::MoreUtils::XS \
+	--module=List::MoreUtils::PP \
+	--module=HTTP::Status \
+	--module=HTTP::Date \
+	--module=Encode:: \
+	--module=File::Find::Rule \
+	--module=IO::Socket::SSL \
+	--module=IO::String \
+	--module=PerlIO::utf8_strict \
+	--module=Text::CSV_XS \
+	--module=DateTime \
+	--link=xml2.so.2 \
+	--link=liblzma.so.5 \
+	--link=icuuc.so.67 \
+	--link=icudata.so.67 \
+	--link=sombok.so.3 \
+	--link=thai.so.0 \
+	--link=libdatrie.so.1 \
+	--link=/usr/lib/libbtparse.so.2 \
+	--addfile="/root/biber/data/biber-tool.conf;lib/Biber/biber-tool.conf" \
+	--addfile="/root/biber/data/schemata/config.rnc;lib/Biber/config.rnc" \
+	--addfile="/root/biber/data/schemata/config.rng;lib/Biber/config.rng"\
+	--addfile="/root/biber/data/schemata/bcf.rnc;lib/Biber/bcf.rnc" \
+	--addfile="/root/biber/data/schemata/bcf.rng;lib/Biber/bcf.rng" \
+	--addfile="/root/biber/lib/Biber/LaTeX/recode_data.xml;lib/Biber/LaTeX/recode_data.xml" \
+	--addfile="/root/biber/data/bcf.xsl;lib/Biber/bcf.xsl" \
+	--addfile="/usr/share/perl5/Business/ISBN/RangeMessage.xml" \
+	--addfile="/usr/local/share/perl/5.32.1/Mozilla/CA/cacert.pem" \
+	--addfile="/usr/lib/arm-linux-gnueabihf/perl5/5.32/PerlIO" \
+	--addfile="/usr/lib/arm-linux-gnueabihf/perl5/5.32/Unicode/Collate/Locale;lib/Unicode/Collate/Locale" \
+	--addfile="/usr/lib/arm-linux-gnueabihf/perl5/5.32/Unicode/Collate/CJK;lib/Unicode/Collate/CJK" \
+	--addfile="/usr/lib/arm-linux-gnueabihf/perl5/5.32/Unicode/Collate/allkeys.txt;lib/Unicode/Collate/allkeys.txt" \
+	--addfile="/usr/lib/arm-linux-gnueabihf/perl5/5.32/Unicode/Collate/keys.txt;lib/Unicode/Collate/keys.txt" \
+	--output=biber-linux_armv7 \
+	/usr/local/bin/biber
+
+#  --module=List::SomeUtils::XS \
+#  --link=/lib/aarch64-linux-gnu/libz.so.1 \
+#  --link=/lib/aarch64-linux-gnu/libgpg-error.so.0 \
+#  --link=/lib/aarch64-linux-gnu/libcrypt.so.1 \
+#  --link=/lib/aarch64-linux-gnu/libgcrypt.so.20 \
+#  --link=/usr/local/lib/libbtparse.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libxslt.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libexslt.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libxml2.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libicui18n.so.63 \
+#  --link=/usr/lib/aarch64-linux-gnu/libicuuc.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libicudata.so \
+#  --link=/usr/lib/aarch64-linux-gnu/liblzma.so \
+#  --link=/usr/lib/aarch64-linux-gnu/libssl.so \
+
+FROM arm32v7/debian:11.9 as pretest
+COPY --from=pack /root/biber/biber-linux_armv7 .
+
+FROM pretest as test
+RUN ./biber-linux_armv7 --help
+#RUN ./biber-linux_armv7
+CMD cp /biber-linux_armv7 /root/ext
+
+# vim: ft=dockerfile
