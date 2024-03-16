@@ -96,6 +96,8 @@ RUN PAR_VERBATIM=1 /usr/bin/pp \
 	--link=thai.so.0 \
 	--link=libdatrie.so.1 \
 	--link=/usr/lib/libbtparse.so.2 \
+	--link=xslt.so.1 \
+	--link=exslt.so.0 \
 	--addfile="/root/biber/data/biber-tool.conf;lib/Biber/biber-tool.conf" \
 	--addfile="/root/biber/data/schemata/config.rnc;lib/Biber/config.rnc" \
 	--addfile="/root/biber/data/schemata/config.rng;lib/Biber/config.rng"\
@@ -130,10 +132,14 @@ RUN PAR_VERBATIM=1 /usr/bin/pp \
 
 FROM arm32v7/debian:11.9 as pretest
 COPY --from=pack /root/biber/biber-linux_armv7 .
+COPY --from=pack /root/biber/testfiles /testfiles
 
 FROM pretest as test
-RUN ./biber-linux_armv7 --help
-#RUN ./biber-linux_armv7
-CMD cp /biber-linux_armv7 /root/ext
+WORKDIR testfiles
+RUN ../biber-linux_armv7 --validate-control --convert-control test
+
+# docker create --name dummy_copy aetx/biber
+# docker cp dummy_copy:/biber-linux_armv7 .
+# docker rm -f dummy_copy
 
 # vim: ft=dockerfile
