@@ -1,10 +1,12 @@
 #!/bin/bash
 
+# $1: biber version
+
 docker build \
 	-f Dockerfile.debian \
 	--target test \
 	-t aetx/biber \
-	--build-arg biberversion=2.19 \
+	--build-arg biberversion=$1 \
 	.
 
 docker create --name dummy_copy aetx/biber
